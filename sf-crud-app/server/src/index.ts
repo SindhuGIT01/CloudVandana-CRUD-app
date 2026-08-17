@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { authRouter } from "./routes/auth.js";
 import { objectsRouter } from "./routes/objects.js";
+import { recordsRouter } from "./routes/records.js";
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 app.use("/api", requireAuth);
 app.use("/api/objects", objectsRouter);
+app.use("/api/records", recordsRouter);
 
 app.listen(env.port, () => {
   console.log(`Server listening on http://localhost:${env.port}`);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ALLOWED_SOBJECTS, isAllowedSObject, SF_API_VERSION } from "../config/constants.js";
-import { SalesforceApiError, sfApiGet } from "../services/salesforceApi.js";
+import { sendSalesforceError, sfApiGet } from "../services/salesforceApi.js";
 
 interface SalesforceDescribeField {
   name: string;
@@ -58,11 +58,6 @@ objectsRouter.get("/:objectName/fields", async (req, res) => {
 
     res.json(fields);
   } catch (error) {
-    if (error instanceof SalesforceApiError) {
-      res.status(error.status === 404 ? 404 : 502).json({ error: error.message });
-      return;
-    }
-    console.error("Failed to describe Salesforce object:", error);
-    res.status(500).json({ error: "Failed to fetch object fields." });
+    sendSalesforceError(res, error, "fetch object fields");
   }
 });
