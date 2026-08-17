@@ -41,7 +41,7 @@
 
 .dashboard {
   width: 100%;
-  max-width: 640px;
+  max-width: 960px;
 }
 
 .dashboard-header {
@@ -95,9 +95,53 @@
   font-size: 14px;
 }
 
-.records-table-placeholder {
+.records-table-wrapper {
   width: 100%;
-  border: 1px dashed var(--border);
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.records-table th,
+.records-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.records-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.records-table-sentinel {
+  text-align: center;
+  color: var(--text);
+  white-space: normal;
+}
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
