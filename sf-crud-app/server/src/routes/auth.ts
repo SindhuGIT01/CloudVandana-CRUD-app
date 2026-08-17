@@ -61,11 +61,19 @@ authRouter.get("/callback", async (req, res) => {
       issuedAt: Date.now(),
     };
 
-    res.redirect(env.clientUrl);
+    res.redirect(`${env.clientUrl}/dashboard`);
   } catch (err) {
     console.error("Salesforce OAuth callback failed:", err);
     res.status(500).send("Failed to complete Salesforce login.");
   }
+});
+
+// Cheap, side-effect-free check the client polls to know whether it should
+// show the login button or the dashboard. Deliberately does NOT reuse
+// requireAuth here — a status check shouldn't trigger a token refresh (and
+// the extra Salesforce round trip that comes with it) just to answer yes/no.
+authRouter.get("/status", (req, res) => {
+  res.json({ authenticated: Boolean(req.session.sf) });
 });
 
 authRouter.get("/logout", (req, res) => {
