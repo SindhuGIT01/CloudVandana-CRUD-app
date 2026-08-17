@@ -19,6 +19,13 @@ export function Dashboard() {
   const fieldsValid =
     selectedFields.length >= MIN_SELECTED_FIELDS && selectedFields.length <= MAX_SELECTED_FIELDS;
 
+  // RecordsTable needs full field metadata (createable/updateable/type), not
+  // just names, to build the Create/Edit forms — mapped in selection order
+  // so table columns match the order fields were checked in.
+  const selectedFieldMeta = selectedFields
+    .map((name) => fields.find((field) => field.name === name))
+    .filter((field): field is (typeof fields)[number] => field !== undefined);
+
   return (
     <main className="dashboard">
       <div className="dashboard-header">
@@ -43,7 +50,7 @@ export function Dashboard() {
         <FieldPicker fields={fields} selected={selectedFields} onChange={setSelectedFields} />
       )}
 
-      {fieldsValid && <RecordsTable objectName={selectedObject} fields={selectedFields} />}
+      {fieldsValid && <RecordsTable objectName={selectedObject} fields={selectedFieldMeta} />}
     </main>
   );
 }

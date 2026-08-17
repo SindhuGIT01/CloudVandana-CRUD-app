@@ -1,10 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInfiniteRecords, type SalesforceRecord } from "../hooks/useInfiniteRecords";
+import type { SalesforceField } from "../hooks/useObjectFields";
+import { useToasts } from "../hooks/useToasts";
+import { RecordFormModal } from "./RecordFormModal";
+import { ToastContainer } from "./ToastContainer";
 
 interface RecordsTableProps {
   objectName: string;
-  fields: string[];
+  fields: SalesforceField[];
 }
+
+type ModalState = { mode: "create" } | { mode: "edit"; record: SalesforceRecord } | null;
 
 function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
@@ -13,20 +19,21 @@ function formatCellValue(value: unknown): string {
   return String(value);
 }
 
-// Salesforce record ids are only present if "Id" happens to be one of the
-// user-picked fields — it isn't guaranteed. Falling back to row position is
-// safe here since records are only ever appended, never reordered.
-function rowKey(record: SalesforceRecord, index: number): string {
-  const id = record.Id;
-  return typeof id === "string" ? id : `row-${index}`;
+function recordId(record: SalesforceRecord): string | undefined {
+  return typeof record.Id === "string" ? record.Id : undefined;
 }
 
 export function RecordsTable({ objectName, fields }: RecordsTableProps) {
-  const { records, loading, hasMore, error, fetchMore } = useInfiniteRecords(objectName, fields);
+  const fieldNames = fields.map((field) => field.name);
+  const { records, loading, hasMore, error, fetchMore, createRecord, updateRecord, deleteRecord } =
+    useInfiniteRecords(objectName, fieldNames);
   const sentinelRef = useRef<HTMLTableRowElement | null>(null);
   // Continuously tracks the sentinel's current intersection state, not just
   // the edge transitions IntersectionObserver calls back on (see below).
   const isIntersectingRef = useRef(false);
+  const { toasts, showToast } = useToasts();
+  const [modalState, setModalState] = useState<ModalState>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -61,38 +68,136 @@ export function RecordsTable({ objectName, fields }: RecordsTableProps) {
     }
   }, [loading, fetchMore]);
 
+  const handleCreateSubmit = async (values: Record<string, unknown>) => {
+    try {
+      await createRecord(values);
+      setModalState(null);
+      showToast(`${objectName} created.`, "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to create ${objectName}.`;
+      showToast(message, "error");
+      // Re-throw so the modal shows the inline error too and stays open for retry.
+      throw err;
+    }
+  };
+
+  const handleEditSubmit = async (id: string, values: Record<string, unknown>) => {
+    try {
+      await updateRecord(id, values);
+      setModalState(null);
+      showToast(`${objectName} updated.`, "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to update ${objectName}.`;
+      showToast(message, "error");
+      throw err;
+    }
+  };
+
+  const handleDelete = async (record: SalesforceRecord) => {
+    const id = recordId(record);
+    if (!id) return;
+    if (!window.confirm(`Delete this ${objectName} record? This can't be undone.`)) return;
+
+    setDeletingId(id);
+    try {
+      await deleteRecord(id);
+      showToast(`${objectName} deleted.`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : `Failed to delete ${objectName}.`, "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
-    <section className="records-table-wrapper">
-      <table className="records-table">
-        <thead>
-          <tr>
-            {fields.map((field) => (
-              <th key={field}>{field}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((record, index) => (
-            <tr key={rowKey(record, index)}>
+    <section className="records-table-panel">
+      <div className="records-table-toolbar">
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => setModalState({ mode: "create" })}
+        >
+          New Record
+        </button>
+      </div>
+
+      <div className="records-table-wrapper">
+        <table className="records-table">
+          <thead>
+            <tr>
               {fields.map((field) => (
-                <td key={field}>{formatCellValue(record[field])}</td>
+                <th key={field.name}>{field.label}</th>
               ))}
+              <th>Actions</th>
             </tr>
-          ))}
-          <tr ref={sentinelRef}>
-            <td colSpan={fields.length} className="records-table-sentinel">
-              {loading && <span className="spinner" role="status" aria-label="Loading records" />}
-              {!loading && error && <span role="alert">{error}</span>}
-              {!loading && !error && !hasMore && records.length === 0 && (
-                <span>No records found.</span>
-              )}
-              {!loading && !error && !hasMore && records.length > 0 && (
-                <span>End of records.</span>
-              )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {records.map((record, index) => {
+              const id = recordId(record);
+              return (
+                <tr key={id ?? `row-${index}`}>
+                  {fields.map((field) => (
+                    <td key={field.name}>{formatCellValue(record[field.name])}</td>
+                  ))}
+                  <td className="records-table-actions">
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => setModalState({ mode: "edit", record })}
+                      disabled={!id}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="link-button link-button-danger"
+                      onClick={() => handleDelete(record)}
+                      disabled={!id || deletingId === id}
+                    >
+                      {deletingId === id ? "Deleting…" : "Delete"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            <tr ref={sentinelRef}>
+              <td colSpan={fields.length + 1} className="records-table-sentinel">
+                {loading && <span className="spinner" role="status" aria-label="Loading records" />}
+                {!loading && error && <span role="alert">{error}</span>}
+                {!loading && !error && !hasMore && records.length === 0 && (
+                  <span>No records found.</span>
+                )}
+                {!loading && !error && !hasMore && records.length > 0 && (
+                  <span>End of records.</span>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {modalState?.mode === "create" && (
+        <RecordFormModal
+          mode="create"
+          objectName={objectName}
+          fields={fields}
+          onClose={() => setModalState(null)}
+          onSubmit={handleCreateSubmit}
+        />
+      )}
+
+      {modalState?.mode === "edit" && recordId(modalState.record) && (
+        <RecordFormModal
+          mode="edit"
+          objectName={objectName}
+          fields={fields}
+          initialValues={modalState.record}
+          onClose={() => setModalState(null)}
+          onSubmit={(values) => handleEditSubmit(recordId(modalState.record) as string, values)}
+        />
+      )}
+
+      <ToastContainer toasts={toasts} />
     </section>
   );
 }
