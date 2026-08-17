@@ -38,3 +38,66 @@
 .secondary-button:hover {
   border-color: var(--text-h);
 }
+
+.dashboard {
+  width: 100%;
+  max-width: 640px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.object-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.object-selector select {
+  font-size: 16px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.field-picker {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.field-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
+.field-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.field-picker-message {
+  margin-top: 12px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.records-table-placeholder {
+  width: 100%;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
