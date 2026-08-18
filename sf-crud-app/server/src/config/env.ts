@@ -9,7 +9,7 @@ function requireEnv(name: string): string {
 export const env = {
   port: process.env.PORT ?? "4000",
   isProduction: process.env.NODE_ENV === "production",
-  clientUrl: process.env.CLIENT_URL ?? "http://localhost:5173",
+  clientUrl: requireEnv("CLIENT_URL"),
   clientId: requireEnv("CLIENT_ID"),
   clientSecret: requireEnv("CLIENT_SECRET"),
   redirectUri: requireEnv("REDIRECT_URI"),
