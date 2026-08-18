@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { FieldPicker } from "../components/FieldPicker";
+import { Header } from "../components/Header";
 import { ObjectSelector } from "../components/ObjectSelector";
 import { RecordsTable } from "../components/RecordsTable";
+import { StatusMessage } from "../components/StatusMessage";
 import { MAX_SELECTED_FIELDS, MIN_SELECTED_FIELDS } from "../constants";
 import { useObjectFields } from "../hooks/useObjectFields";
 
@@ -28,29 +31,25 @@ export function Dashboard() {
 
   return (
     <main className="dashboard">
-      <div className="dashboard-header">
-        <h1>Dashboard</h1>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => {
-            window.location.href = "/auth/logout";
-          }}
-        >
-          Log out
-        </button>
-      </div>
+      <Header title="Dashboard" showLogout />
 
       <ObjectSelector value={selectedObject} onChange={handleObjectChange} />
 
-      {status === "loading" && <p>Loading fields…</p>}
-      {status === "error" && <p role="alert">{error}</p>}
+      {status === "loading" && <StatusMessage variant="loading" message="Loading fields…" />}
+      {status === "error" && <StatusMessage variant="error" message={error ?? "Failed to load fields."} />}
 
       {status === "ready" && (
         <FieldPicker fields={fields} selected={selectedFields} onChange={setSelectedFields} />
       )}
 
-      {fieldsValid && <RecordsTable objectName={selectedObject} fields={selectedFieldMeta} />}
+      {fieldsValid && (
+        // Keying on the selection means picking a different object/field
+        // set remounts a fresh boundary, so a prior crash doesn't get stuck
+        // showing the fallback forever after the user changes their input.
+        <ErrorBoundary label="the records table" key={`${selectedObject}-${selectedFields.join(",")}`}>
+          <RecordsTable objectName={selectedObject} fields={selectedFieldMeta} />
+        </ErrorBoundary>
+      )}
     </main>
   );
 }

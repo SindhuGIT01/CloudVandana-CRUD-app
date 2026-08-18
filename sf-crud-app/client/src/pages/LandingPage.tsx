@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { StatusMessage } from "../components/StatusMessage";
 import { useAuthStatus } from "../hooks/useAuthStatus";
 
 export function LandingPage() {
@@ -11,7 +12,7 @@ export function LandingPage() {
   }
 
   if (status === "loading") {
-    return <p>Loading…</p>;
+    return <StatusMessage variant="loading" message="Loading…" />;
   }
 
   return (

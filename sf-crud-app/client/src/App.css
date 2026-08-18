@@ -44,13 +44,6 @@
   max-width: 960px;
 }
 
-.dashboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
 .object-selector {
   display: flex;
   flex-direction: column;
@@ -145,22 +138,6 @@
 
 .records-table-actions {
   white-space: nowrap;
-}
-
-.spinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .link-button {
@@ -270,12 +247,6 @@
   font-size: 12px;
 }
 
-.record-form-error {
-  color: #e5484d;
-  font-size: 14px;
-  margin: 0;
-}
-
 .record-form-actions {
   display: flex;
   justify-content: flex-end;
@@ -309,4 +280,39 @@
 
 .toast-error {
   background: #e5484d;
+}
+
+/* Responsive: keep things usable down to a smaller laptop window (not a
+   ground-up mobile redesign — this app targets laptop screens). */
+@media (max-width: 1024px) {
+  .field-picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  .records-table-wrapper {
+    max-height: 400px;
+  }
+}
+
+@media (max-width: 640px) {
+  .records-table-toolbar {
+    justify-content: stretch;
+  }
+
+  .records-table-toolbar .primary-button {
+    width: 100%;
+  }
+
+  .modal-panel {
+    padding: 16px;
+  }
+
+  .toast-container {
+    left: 20px;
+    right: 20px;
+  }
+
+  .toast {
+    max-width: none;
+  }
 }

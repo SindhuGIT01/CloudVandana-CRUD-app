@@ -3,6 +3,7 @@ import { useInfiniteRecords, type SalesforceRecord } from "../hooks/useInfiniteR
 import type { SalesforceField } from "../hooks/useObjectFields";
 import { useToasts } from "../hooks/useToasts";
 import { RecordFormModal } from "./RecordFormModal";
+import { StatusMessage } from "./StatusMessage";
 import { ToastContainer } from "./ToastContainer";
 
 interface RecordsTableProps {
@@ -162,13 +163,13 @@ export function RecordsTable({ objectName, fields }: RecordsTableProps) {
             })}
             <tr ref={sentinelRef}>
               <td colSpan={fields.length + 1} className="records-table-sentinel">
-                {loading && <span className="spinner" role="status" aria-label="Loading records" />}
-                {!loading && error && <span role="alert">{error}</span>}
+                {loading && <StatusMessage variant="loading" message="Loading records…" />}
+                {!loading && error && <StatusMessage variant="error" message={error} />}
                 {!loading && !error && !hasMore && records.length === 0 && (
-                  <span>No records found.</span>
+                  <StatusMessage variant="empty" message="No records found." />
                 )}
                 {!loading && !error && !hasMore && records.length > 0 && (
-                  <span>End of records.</span>
+                  <StatusMessage variant="empty" message="End of records." />
                 )}
               </td>
             </tr>

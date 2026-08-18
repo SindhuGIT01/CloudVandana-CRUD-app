@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { SalesforceRecord } from "../hooks/useInfiniteRecords";
 import type { SalesforceField } from "../hooks/useObjectFields";
 import { Modal } from "./Modal";
+import { StatusMessage } from "./StatusMessage";
 
 interface RecordFormModalProps {
   mode: "create" | "edit";
@@ -142,11 +143,7 @@ export function RecordFormModal({
           );
         })}
 
-        {formError && (
-          <p role="alert" className="record-form-error">
-            {formError}
-          </p>
-        )}
+        {formError && <StatusMessage variant="error" message={formError} />}
 
         <div className="record-form-actions">
           <button type="button" className="secondary-button" onClick={onClose} disabled={submitting}>
