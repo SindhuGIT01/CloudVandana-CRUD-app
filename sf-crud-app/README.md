@@ -7,12 +7,13 @@ Full-stack CRUD app scaffold.
 
 ## Getting started
 
-Install dependencies for the root, server, and client:
+Install dependencies (a root `postinstall` hook also installs `server/` and
+`client/`'s own dependencies — this is not an npm workspaces setup, each
+folder has its own separate `package.json`/`node_modules`, so this hook is
+what makes a single `npm install` enough, both locally and on a host):
 
 ```bash
 npm install
-npm install --prefix server
-npm install --prefix client
 ```
 
 Copy the environment files and fill in values as needed:
