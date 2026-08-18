@@ -15,6 +15,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
+// Render (like most PaaS) terminates HTTPS at a proxy in front of this app —
+// the connection Express sees directly is plain HTTP, only the
+// X-Forwarded-Proto header says the original request was HTTPS. Without
+// this, req.secure is always false behind that proxy, and express-session
+// silently refuses to set a cookie marked secure: true, so the session
+// holding oauthState/pkceVerifier never reaches the browser between
+// /auth/login and /auth/callback.
+if (env.isProduction) {
+  app.set("trust proxy", 1);
+}
+
 app.use(
   cors({
     origin: env.clientUrl,
