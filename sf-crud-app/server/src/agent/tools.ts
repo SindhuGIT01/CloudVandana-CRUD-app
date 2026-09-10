@@ -76,6 +76,23 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         object: objectProperty,
         filters: filtersProperty,
         fields: fieldsListProperty,
+        order_by: {
+          type: "object",
+          description:
+            "Sort order. Defaults to Id ascending. Use e.g. { field: \"CreatedDate\", " +
+            "direction: \"DESC\" } for newest-first, or { field: \"Amount\", direction: \"DESC\" } " +
+            "for largest-first.",
+          properties: {
+            field: { type: "string", description: "Field API name to sort by." },
+            direction: {
+              type: "string",
+              enum: ["ASC", "DESC"],
+              description: "Sort direction. Defaults to ASC.",
+            },
+          },
+          required: ["field"],
+          additionalProperties: false,
+        },
         limit: {
           type: "integer",
           minimum: 1,

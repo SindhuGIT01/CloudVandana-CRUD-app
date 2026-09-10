@@ -121,6 +121,23 @@ function buildWhereClause(input: ToolInput): string {
   return ` WHERE ${clauses.join(" AND ")}`;
 }
 
+function resolveOrderBy(input: ToolInput): string {
+  const raw = input.order_by;
+  if (raw === undefined || raw === null) return "ORDER BY Id";
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ToolArgumentError('"order_by" must be an object like { field, direction }.');
+  }
+  const { field, direction } = raw as Record<string, unknown>;
+  if (typeof field !== "string" || !isValidFieldName(field)) {
+    throw new ToolArgumentError(`Invalid order_by field "${String(field)}".`);
+  }
+  const dir = String(direction ?? "ASC").toUpperCase();
+  if (dir !== "ASC" && dir !== "DESC") {
+    throw new ToolArgumentError('"order_by.direction" must be "ASC" or "DESC".');
+  }
+  return `ORDER BY ${field} ${dir}`;
+}
+
 function resolveLimit(input: ToolInput): number {
   const raw = input.limit;
   if (raw === undefined) return DEFAULT_SEARCH_LIMIT;
@@ -175,9 +192,10 @@ async function searchRecords(input: ToolInput, sf: SalesforceSession): Promise<T
   const object = requireObject(input);
   const fields = resolveFields(input);
   const where = buildWhereClause(input);
+  const orderBy = resolveOrderBy(input);
   const limit = resolveLimit(input);
 
-  const soql = `SELECT ${fields.join(", ")} FROM ${object}${where} ORDER BY Id LIMIT ${limit}`;
+  const soql = `SELECT ${fields.join(", ")} FROM ${object}${where} ${orderBy} LIMIT ${limit}`;
   const result = await sfApiGet<SoqlQueryResult>(
     sf,
     `/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent(soql)}`,
