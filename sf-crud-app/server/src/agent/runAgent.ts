@@ -95,6 +95,11 @@ function describeAnthropicError(error: unknown): string {
     return "The agent couldn't reach the Anthropic API. Check the server's network connection.";
   }
   if (error instanceof Anthropic.APIError) {
+    // A depleted account comes back as a 400 invalid_request_error, so it
+    // isn't caught by the branches above — match on the message instead.
+    if (typeof error.message === "string" && error.message.includes("credit balance")) {
+      return "The agent's Anthropic account is out of credits. Add credits at console.anthropic.com (Plans & Billing), then try again.";
+    }
     return `The Anthropic API returned an error (${error.status ?? "unknown"}). Please try again.`;
   }
   console.error("Unexpected error calling Claude:", error);
