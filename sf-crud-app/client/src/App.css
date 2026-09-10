@@ -360,6 +360,31 @@
   font-style: italic;
 }
 
+.agent-chat-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--code-bg);
+  font-size: 14px;
+  color: var(--text-h);
+  text-align: left;
+}
+
+.agent-chat-confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-chat-confirm .primary-button,
+.agent-chat-confirm .secondary-button {
+  font-size: 14px;
+  padding: 6px 14px;
+}
+
 .agent-chat-input {
   display: flex;
   gap: 8px;

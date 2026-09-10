@@ -11,6 +11,7 @@ export interface AgentMessage {
 interface ChatResponse {
   reply?: string;
   error?: string;
+  awaitingConfirmation?: boolean;
 }
 
 // Owns the chat transcript and the send-to-backend logic for the agent
@@ -20,6 +21,9 @@ interface ChatResponse {
 export function useAgentChat() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [sending, setSending] = useState(false);
+  // True while the agent is holding a destructive action pending a
+  // yes/no from the user — drives the Yes/No shortcut buttons.
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   // Guards against a second submit while a request is in flight; kept as a
   // ref so sendMessage can stay a stable useCallback.
   const sendingRef = useRef(false);
@@ -38,6 +42,7 @@ export function useAgentChat() {
       append("user", text);
       sendingRef.current = true;
       setSending(true);
+      setAwaitingConfirmation(false);
 
       try {
         const res = await fetch("/api/agent/chat", {
@@ -52,6 +57,7 @@ export function useAgentChat() {
           append("error", data?.error ?? `The agent request failed (${res.status}).`);
         } else {
           append("agent", data?.reply ?? "(the agent returned an empty reply)");
+          setAwaitingConfirmation(data?.awaitingConfirmation === true);
         }
       } catch {
         append("error", "Couldn't reach the agent. Check your connection and try again.");
@@ -63,5 +69,5 @@ export function useAgentChat() {
     [append],
   );
 
-  return { messages, sending, sendMessage };
+  return { messages, sending, awaitingConfirmation, sendMessage };
 }

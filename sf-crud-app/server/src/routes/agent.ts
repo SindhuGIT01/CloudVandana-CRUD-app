@@ -8,8 +8,9 @@ export const agentRouter = Router();
 // present and refreshed by the time this handler executes.
 //
 // Body: { message: string }
-// Later tasks add { history: [...] } for multi-turn context and a
-// confirmation round-trip for destructive actions.
+// The confirmation round-trip for destructive actions is handled inside
+// runAgent via req.session (it stashes a pending action and resumes when
+// the next message is "yes" / "no").
 agentRouter.post("/chat", async (req, res) => {
   const sf = req.session.sf;
   if (!sf) {
@@ -25,7 +26,7 @@ agentRouter.post("/chat", async (req, res) => {
   }
 
   try {
-    const result = await runAgent(message, sf);
+    const result = await runAgent(message, sf, req.session);
     res.json(result);
   } catch (error) {
     console.error("Agent request failed:", error);

@@ -11,7 +11,7 @@ const EXAMPLES = [
 ];
 
 export function AgentChat() {
-  const { messages, sending, sendMessage } = useAgentChat();
+  const { messages, sending, awaitingConfirmation, sendMessage } = useAgentChat();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +64,28 @@ export function AgentChat() {
             <div className="agent-bubble agent-bubble-agent agent-bubble-typing">Thinking…</div>
           )}
         </div>
+
+        {awaitingConfirmation && !sending && (
+          <div className="agent-chat-confirm">
+            <span>The agent needs your confirmation before it changes any data.</span>
+            <div className="agent-chat-confirm-buttons">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void sendMessage("yes")}
+              >
+                Yes, proceed
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void sendMessage("no")}
+              >
+                No, cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         <form className="agent-chat-input" onSubmit={handleSubmit}>
           <input
