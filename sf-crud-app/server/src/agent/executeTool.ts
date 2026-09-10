@@ -8,8 +8,8 @@
 //
 // executeTool() always resolves to a plain JSON-serializable object — on
 // failure it returns { error } (plus Salesforce's { details } when present)
-// rather than throwing, so the Task 3 reasoning loop can feed the problem
-// back to Claude and let it recover or ask the user.
+// rather than throwing, so the reasoning loop can feed the problem back to
+// Claude and let it recover or ask the user.
 
 import { isAllowedSObject, SF_API_VERSION } from "../config/constants.js";
 import type { SalesforceSession } from "../auth/session.js";

@@ -15,8 +15,8 @@ export const env = {
   redirectUri: requireEnv("REDIRECT_URI"),
   sfLoginUrl: requireEnv("SF_LOGIN_URL"),
   sessionSecret: requireEnv("SESSION_SECRET"),
-  // Optional for now so existing CRUD functionality keeps working without a
-  // key. The agent route (Task 3+) checks for it and returns a clear error
-  // if it's missing. Can be promoted to requireEnv once the agent is core.
+  // Optional: enables the Salesforce Ops Agent. Left blank, the CRUD app
+  // works unchanged and the agent route replies that it isn't configured.
+  // Could be promoted to requireEnv once the agent is considered core.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
 };

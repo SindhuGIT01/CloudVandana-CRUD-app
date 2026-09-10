@@ -1,10 +1,10 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { ALLOWED_SOBJECTS } from "../config/constants.js";
 
-// The existing CRUD capabilities, described in Anthropic's tool-calling
-// format so Claude can pick which one(s) to call and with what arguments.
-// Executors live in executeTool.ts; the reasoning loop that hands these to
-// Claude is Task 3.
+// The CRUD capabilities, described in Anthropic's tool-calling format so
+// Claude can pick which one(s) to call and with what arguments. Executors
+// live in executeTool.ts; the reasoning loop that hands these to Claude is
+// in runAgent.ts.
 
 const objectProperty = {
   type: "string",
@@ -219,7 +219,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
 ];
 
 // Tools that write to Salesforce and must be confirmed with the user
-// before running (Task 5 wires the confirmation gate to this set).
+// before running — runAgent.ts pauses the loop on any of these.
 export const DESTRUCTIVE_TOOLS = new Set<string>([
   "update_record",
   "delete_record",

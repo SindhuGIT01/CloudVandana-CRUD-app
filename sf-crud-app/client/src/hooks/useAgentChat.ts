@@ -16,9 +16,9 @@ interface ChatResponse {
 }
 
 // Owns the chat transcript and the send-to-backend logic for the agent
-// page. The backend (POST /api/agent/chat) is still a stub in Task 1, so
-// replies are placeholder text — this task is the UI plumbing:
-// input -> POST -> append reply -> transcript persists in state.
+// page: input -> POST /api/agent/chat -> append reply -> transcript
+// persists in state. Tracks awaitingConfirmation so the page can show the
+// Yes/No buttons while the agent holds a destructive action.
 export function useAgentChat() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [sending, setSending] = useState(false);
