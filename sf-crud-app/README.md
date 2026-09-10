@@ -1,6 +1,7 @@
 # sf-crud-app
 
-Full-stack CRUD app scaffold.
+Full-stack CRUD app for Salesforce, plus a natural-language **Salesforce Ops
+Agent** on top of the same endpoints (see the section below).
 
 - `server/` — Node.js + Express + TypeScript API
 - `client/` — React + Vite + TypeScript frontend
@@ -48,6 +49,122 @@ npm start                # run the production build (npm run build first)
 npm run lint:server    # lint server
 npm run lint:client    # lint client
 ```
+
+## Salesforce Ops Agent
+
+A natural-language layer over the same CRUD endpoints. Instead of picking an
+object and filling in a form, you type a request — *"close all opportunities
+older than 90 days with no activity"* — and an LLM agent (Anthropic Claude)
+plans it, calls the existing Salesforce REST operations, and reports back in
+plain English.
+
+It is **purely additive**: one route (`POST /api/agent/chat`), one optional
+env var, no change to the OAuth or CRUD code. With `ANTHROPIC_API_KEY` unset
+the agent replies that it isn't configured and the rest of the app is
+unaffected. UI lives at **`/agent`** (linked from the dashboard).
+
+### Enabling it
+
+Add to `server/.env`, then restart the server:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Get a key at <https://console.anthropic.com/settings/keys>.
+
+### Architecture
+
+Three pieces, all under `server/src/agent/`.
+
+**1. Tool definitions (`tools.ts`)** — each CRUD capability described in
+Anthropic's tool-calling schema so the model can invoke it:
+
+| Tool | Backend call |
+|---|---|
+| `search_records(object, filters[], order_by, fields[], limit)` | SOQL `SELECT … WHERE … ORDER BY … LIMIT` |
+| `get_record(object, id, fields[])` | SOQL by Id |
+| `create_record(object, fields{})` | `POST /sobjects/{object}` |
+| `update_record(object, id, fields{})` | `PATCH /sobjects/{object}/{id}` |
+| `delete_record(object, id)` | `DELETE /sobjects/{object}/{id}` |
+| `update_records(object, ids[], fields{})` | one PATCH per Id (≤ 200), failures isolated |
+| `delete_records(object, ids[])` | one DELETE per Id (≤ 200), failures isolated |
+
+Executors (`executeTool.ts`) call the existing `services/salesforceApi.ts`
+helpers **in-process** — no HTTP self-calls — reusing the access token that
+`requireAuth` already validated and refreshed for the request, so the agent
+can never run without an authenticated Salesforce session. Object names are
+checked against the allow-list; field names and record Ids are validated with
+the same patterns the REST routes use; string filter values are quoted and
+escaped before they enter SOQL (`validation.ts`).
+
+**2. Reasoning loop (`runAgent.ts`)** — a manual tool-use loop:
+
+1. Send the user message + tool definitions + a system prompt to Claude
+   (`claude-opus-5`, adaptive thinking).
+2. If Claude returns text (`stop_reason !== "tool_use"`), that is the answer.
+3. Otherwise execute each requested tool, feed the results back as
+   `tool_result` blocks, and loop.
+
+The system prompt directs the model to work **search → decide → act**: let
+Salesforce filter, work out which Ids actually match the intent, then act on
+the whole set in one bulk call. Capped at 20 Claude↔tool round trips; if every
+tool call fails for three turns straight the run aborts with the last error
+instead of exhausting the budget.
+
+**3. Confirmation step** — before any `update_*` / `delete_*` executes, the
+loop stops, stashes the transcript on the session, and returns a preview built
+**from the tool arguments, not from what the model claims**:
+
+```
+This will change your Salesforce data:
+- Delete 3 Lead records: 00Q…, 00Q…, 00Q…
+Reply "yes" to proceed or "no" to cancel.
+```
+
+The next message resumes it: *yes* runs the stashed calls and continues the
+loop; *no* feeds a "user declined" result back so the model acknowledges;
+anything unclear re-shows the preview. A pending action expires after 15
+minutes. Read-only tools never pause. The client shows **Yes / No** buttons
+while a confirmation is pending.
+
+### Error handling
+
+- Anthropic API failures (rejected key, rate limit, overload, network) map to
+  specific messages, not a generic 500.
+- A Salesforce `401` / `INVALID_SESSION_ID` mid-loop aborts the request with
+  `sessionExpired: true` so the client can prompt a re-login.
+- Invalid SOQL / unknown field names return to the model as `{ error }`; the
+  prompt says retry once if the fix is obvious, otherwise explain and stop.
+- Ambiguous requests get one clarifying question — the agent never invents an
+  object, record, or field value.
+
+### Files
+
+```
+server/src/agent/
+├── tools.ts        # tool definitions (Anthropic schema) + DESTRUCTIVE_TOOLS
+├── executeTool.ts  # executors -> services/salesforceApi.ts; SOQL build + validation
+├── validation.ts   # field-name / Id patterns, SOQL string escaping
+└── runAgent.ts     # reasoning loop + confirmation gate + error handling
+server/src/routes/agent.ts               # POST /api/agent/chat
+client/src/pages/AgentChat.tsx           # chat UI
+client/src/hooks/useAgentChat.ts         # transcript state + fetch
+client/src/components/AgentMarkdown.tsx  # tiny Markdown renderer for replies
+```
+
+`AGENT_TEST_CONVERSATIONS.md` has worked end-to-end examples (simple read,
+filtered bulk update, confirmation, ambiguous request).
+
+### Limitations
+
+- Pending confirmations live in the in-memory session — a server restart drops
+  them (just re-issue the request).
+- Bulk tools loop single-record REST calls rather than using Salesforce's
+  composite/collections endpoint — simpler and failure-isolated, fine for the
+  record counts here.
+- One conversation per session; the transcript is not persisted across page
+  loads.
 
 ## Deployment
 
@@ -101,6 +218,7 @@ for each is in `server/.env.example`, summarized here:
 | `REDIRECT_URI` | `https://your-app.onrender.com/auth/callback` — must exactly match a Callback URL on the External Client App |
 | `SF_LOGIN_URL` | `https://login.salesforce.com` (or `https://test.salesforce.com` for a sandbox) |
 | `SESSION_SECRET` | A long random string, e.g. `openssl rand -hex 32` — keep secret, different from the dev value |
+| `ANTHROPIC_API_KEY` | Optional. Enables the Salesforce Ops Agent; leave unset and the rest of the app works unchanged. Keep secret |
 
 `client/.env.example`'s `VITE_API_URL` is not read by any code — the client
 only ever makes relative `fetch('/api/...')` calls, so once it's served by
@@ -139,7 +257,8 @@ origin, nothing cross-site to get wrong.
 ```
 sf-crud-app/
 ├── client/   # React + Vite + TypeScript
-├── server/   # Express + TypeScript
+├── server/   # Express + TypeScript (CRUD API + Salesforce Ops Agent under src/agent/)
+├── AGENT_TEST_CONVERSATIONS.md
 ├── .gitignore
 └── README.md
 ```
