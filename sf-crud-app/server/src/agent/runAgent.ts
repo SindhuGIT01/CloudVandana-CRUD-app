@@ -30,6 +30,10 @@ const MAX_ITERATIONS = 20;
 // A stashed pending action older than this is treated as abandoned.
 const PENDING_TTL_MS = 15 * 60 * 1000;
 
+// If this many turns in a row have every tool call fail, stop looping and
+// report back instead of burning the whole iteration budget on retries.
+const MAX_CONSECUTIVE_ERROR_TURNS = 3;
+
 const SYSTEM_PROMPT = `You are the Salesforce Ops Agent for a CRUD app. A user types a plain-English request and you carry it out by calling the provided tools against their Salesforce org.
 
 You can work with five objects: Account, Opportunity, Lead, Contact, and Case.
@@ -42,9 +46,10 @@ Work in a search -> decide -> act loop:
 Other guidelines:
 - Never guess an Id - always get it from a search_records result first.
 - Request only the fields you need. Case has no Name field - use fields like CaseNumber, Subject, Status, Priority.
-- If a request is ambiguous (which object? which record? what new value? what does "close" mean for this object?), ask the user a short clarifying question instead of guessing.
+- If a request is ambiguous, ask ONE short clarifying question instead of guessing. Ambiguous means: the object or record isn't clear ("update the Acme record" - which object?), the new value isn't given ("bump the amount" - to what?), "close"/"archive"/"done" could map to more than one field or stage, or a name matches several records. Never invent a field value the user didn't supply.
+- If a search returns no records, say plainly that nothing matched and stop - don't loosen the filters unless the user asked you to.
 - The app pauses and asks the user to confirm before any update or delete actually runs, so you don't need to ask for confirmation yourself - just call the tool. Before calling a destructive tool, write a short line naming the records you're about to change.
-- When a tool returns an { error }, read it, and either fix the arguments and retry or explain the problem to the user.
+- When a tool returns an { error }, read it. Fix the arguments and retry ONCE if the fix is obvious (a wrong field name, a missing quote); otherwise explain the problem to the user in plain language and stop. Don't retry the same call unchanged.
 
 Format your final answer for a chat window, not a terminal:
 - Open with a one-line summary of the outcome, e.g. "Found 12 opportunities matching your filter." or "Closed all 12."
@@ -56,9 +61,45 @@ Format your final answer for a chat window, not a terminal:
 export interface AgentReply {
   reply: string;
   awaitingConfirmation?: boolean;
+  // Set when the Salesforce session died mid-request — the client should
+  // prompt the user to log in again.
+  sessionExpired?: boolean;
 }
 
 type ChatSession = Session & Partial<SessionData>;
+
+// Thrown from deep in the loop to end the whole request with a specific
+// user-facing reply (Anthropic API down, Salesforce session expired, too
+// many consecutive tool errors). Caught once in runAgent.
+class AgentAbort extends Error {
+  constructor(public readonly reply: AgentReply) {
+    super(reply.reply);
+    this.name = "AgentAbort";
+  }
+}
+
+function describeAnthropicError(error: unknown): string {
+  if (error instanceof Anthropic.AuthenticationError) {
+    return "The agent's Anthropic API key was rejected. Check ANTHROPIC_API_KEY on the server.";
+  }
+  if (error instanceof Anthropic.PermissionDeniedError) {
+    return "The Anthropic API key doesn't have access to the model this agent uses.";
+  }
+  if (error instanceof Anthropic.RateLimitError) {
+    return "The agent is being rate-limited by the Anthropic API right now. Wait a moment and try again.";
+  }
+  if (error instanceof Anthropic.InternalServerError) {
+    return "The Anthropic API is having trouble right now. Please try again in a bit.";
+  }
+  if (error instanceof Anthropic.APIConnectionError) {
+    return "The agent couldn't reach the Anthropic API. Check the server's network connection.";
+  }
+  if (error instanceof Anthropic.APIError) {
+    return `The Anthropic API returned an error (${error.status ?? "unknown"}). Please try again.`;
+  }
+  console.error("Unexpected error calling Claude:", error);
+  return "The agent hit an unexpected error while talking to Claude.";
+}
 
 let cachedClient: Anthropic | null = null;
 
@@ -133,12 +174,55 @@ function isToolUse(block: Anthropic.ContentBlock): block is Anthropic.ToolUseBlo
   return block.type === "tool_use";
 }
 
+async function createMessage(
+  client: Anthropic,
+  messages: Anthropic.MessageParam[],
+): Promise<Anthropic.Message> {
+  try {
+    return await client.messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      thinking: { type: "adaptive" },
+      system: SYSTEM_PROMPT,
+      tools: AGENT_TOOLS,
+      messages,
+    });
+  } catch (error) {
+    throw new AgentAbort({ reply: describeAnthropicError(error) });
+  }
+}
+
+// A Salesforce 401 / INVALID_SESSION_ID means the OAuth token died after
+// requireAuth let the request through (the agent loop can run for a while).
+function isSalesforceAuthError(result: Record<string, unknown>): boolean {
+  if (result.status === 401) return true;
+  const details = result.details;
+  return (
+    Array.isArray(details) &&
+    details.some(
+      (detail) =>
+        detail !== null &&
+        typeof detail === "object" &&
+        (detail as { errorCode?: string }).errorCode === "INVALID_SESSION_ID",
+    )
+  );
+}
+
+interface ToolTurnOutcome {
+  results: Anthropic.ToolResultBlockParam[];
+  errorCount: number;
+  lastError: string | null;
+}
+
 async function executeToolUses(
   blocks: Anthropic.ToolUseBlock[],
   sf: SalesforceSession,
   options: { declined?: boolean } = {},
-): Promise<Anthropic.ToolResultBlockParam[]> {
+): Promise<ToolTurnOutcome> {
   const results: Anthropic.ToolResultBlockParam[] = [];
+  let errorCount = 0;
+  let lastError: string | null = null;
+
   for (const block of blocks) {
     if (options.declined) {
       results.push({
@@ -149,11 +233,27 @@ async function executeToolUses(
       });
       continue;
     }
+
     const result = await executeTool(
       block.name,
       (block.input ?? {}) as Record<string, unknown>,
       sf,
     );
+
+    if (isSalesforceAuthError(result)) {
+      throw new AgentAbort({
+        reply:
+          "Your Salesforce session expired while the agent was working. " +
+          "Reload the page and log in again, then retry.",
+        sessionExpired: true,
+      });
+    }
+
+    if (typeof result.error === "string") {
+      errorCount += 1;
+      lastError = result.error;
+    }
+
     results.push({
       type: "tool_result",
       tool_use_id: block.id,
@@ -161,7 +261,8 @@ async function executeToolUses(
       is_error: typeof result.error === "string",
     });
   }
-  return results;
+
+  return { results, errorCount, lastError };
 }
 
 // Runs the Claude<->tool loop from an existing message list. Returns a
@@ -173,15 +274,10 @@ async function runLoop(
   sf: SalesforceSession,
   session: ChatSession,
 ): Promise<AgentReply> {
+  let consecutiveErrorTurns = 0;
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      thinking: { type: "adaptive" },
-      system: SYSTEM_PROMPT,
-      tools: AGENT_TOOLS,
-      messages,
-    });
+    const response = await createMessage(client, messages);
 
     messages.push({ role: "assistant", content: response.content });
 
@@ -209,7 +305,22 @@ async function runLoop(
       };
     }
 
-    messages.push({ role: "user", content: await executeToolUses(toolUses, sf) });
+    const outcome = await executeToolUses(toolUses, sf);
+    messages.push({ role: "user", content: outcome.results });
+
+    if (toolUses.length > 0 && outcome.errorCount === toolUses.length) {
+      consecutiveErrorTurns += 1;
+      if (consecutiveErrorTurns >= MAX_CONSECUTIVE_ERROR_TURNS) {
+        throw new AgentAbort({
+          reply:
+            "The agent kept hitting errors trying to do that. The last one was:\n\n" +
+            `> ${outcome.lastError ?? "unknown error"}\n\n` +
+            "Try rephrasing the request, or double-check the object and field names.",
+        });
+      }
+    } else {
+      consecutiveErrorTurns = 0;
+    }
   }
 
   return {
@@ -254,14 +365,11 @@ async function resumePending(
 
   session.agentPending = undefined;
 
-  if (decision === "no") {
-    messages.push({
-      role: "user",
-      content: await executeToolUses(toolUses, sf, { declined: true }),
-    });
-  } else {
-    messages.push({ role: "user", content: await executeToolUses(toolUses, sf) });
-  }
+  const outcome =
+    decision === "no"
+      ? await executeToolUses(toolUses, sf, { declined: true })
+      : await executeToolUses(toolUses, sf);
+  messages.push({ role: "user", content: outcome.results });
 
   return runLoop(client, messages, sf, session);
 }
@@ -290,8 +398,17 @@ export async function runAgent(
     };
   }
 
-  if (session.agentPending) {
-    return resumePending(client, message, sf, session);
+  try {
+    if (session.agentPending) {
+      return await resumePending(client, message, sf, session);
+    }
+    return await runFresh(client, message, sf, session);
+  } catch (error) {
+    if (error instanceof AgentAbort) {
+      // A partial pending action is no longer resumable once we've bailed.
+      session.agentPending = undefined;
+      return error.reply;
+    }
+    throw error;
   }
-  return runFresh(client, message, sf, session);
 }

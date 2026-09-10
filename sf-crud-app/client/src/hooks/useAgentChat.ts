@@ -12,6 +12,7 @@ interface ChatResponse {
   reply?: string;
   error?: string;
   awaitingConfirmation?: boolean;
+  sessionExpired?: boolean;
 }
 
 // Owns the chat transcript and the send-to-backend logic for the agent
@@ -55,6 +56,9 @@ export function useAgentChat() {
 
         if (!res.ok) {
           append("error", data?.error ?? `The agent request failed (${res.status}).`);
+        } else if (data?.sessionExpired) {
+          append("error", data.reply ?? "Your Salesforce session expired. Please log in again.");
+          setAwaitingConfirmation(false);
         } else {
           append("agent", data?.reply ?? "(the agent returned an empty reply)");
           setAwaitingConfirmation(data?.awaitingConfirmation === true);
