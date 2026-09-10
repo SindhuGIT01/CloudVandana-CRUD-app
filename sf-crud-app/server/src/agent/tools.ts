@@ -151,8 +151,61 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "update_records",
+    description:
+      "Apply the SAME field changes to many records of one object type in a single call. " +
+      "Use this instead of repeated update_record calls when acting on more than a couple " +
+      "of records (e.g. closing every stale opportunity). Destructive — the agent asks the " +
+      "user to confirm before this runs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        object: objectProperty,
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 200,
+          description: "Record Ids to update, from a prior search_records call. Max 200 per call.",
+        },
+        fields: {
+          ...fieldMapProperty,
+          description: "Field API names mapped to the new values applied to every listed record.",
+        },
+      },
+      required: ["object", "ids", "fields"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "delete_records",
+    description:
+      "Delete many records of one object type in a single call. Use this instead of repeated " +
+      "delete_record calls. Destructive — the agent asks the user to confirm before this runs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        object: objectProperty,
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 200,
+          description: "Record Ids to delete, from a prior search_records call. Max 200 per call.",
+        },
+      },
+      required: ["object", "ids"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // Tools that write to Salesforce and must be confirmed with the user
 // before running (Task 5 wires the confirmation gate to this set).
-export const DESTRUCTIVE_TOOLS = new Set<string>(["update_record", "delete_record"]);
+export const DESTRUCTIVE_TOOLS = new Set<string>([
+  "update_record",
+  "delete_record",
+  "update_records",
+  "delete_records",
+]);

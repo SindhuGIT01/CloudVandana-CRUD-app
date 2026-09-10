@@ -27,6 +27,7 @@ export type ToolResult = Record<string, unknown>;
 
 const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 200;
+const MAX_BULK_IDS = 200;
 const DEFAULT_FIELDS = ["Id", "Name"];
 
 const FILTER_OPERATORS = new Set(["=", "!=", "<", "<=", ">", ">=", "LIKE", "IN"]);
@@ -149,6 +150,27 @@ function requireFieldMap(input: ToolInput): Record<string, unknown> {
   return fields as Record<string, unknown>;
 }
 
+function requireIdList(input: ToolInput): string[] {
+  const raw = input.ids;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new ToolArgumentError('"ids" must be a non-empty array of Salesforce Ids.');
+  }
+  const ids = Array.from(
+    new Set(raw.map((v) => (typeof v === "string" ? v.trim() : ""))),
+  );
+  if (ids.some((id) => id === "")) {
+    throw new ToolArgumentError('"ids" must contain only non-empty Id strings.');
+  }
+  const bad = ids.find((id) => !isValidSalesforceId(id));
+  if (bad) throw new ToolArgumentError(`Invalid Salesforce Id "${bad}".`);
+  if (ids.length > MAX_BULK_IDS) {
+    throw new ToolArgumentError(
+      `Too many ids (${ids.length}); act on at most ${MAX_BULK_IDS} records per call.`,
+    );
+  }
+  return ids;
+}
+
 async function searchRecords(input: ToolInput, sf: SalesforceSession): Promise<ToolResult> {
   const object = requireObject(input);
   const fields = resolveFields(input);
@@ -211,6 +233,75 @@ async function deleteRecord(input: ToolInput, sf: SalesforceSession): Promise<To
   return { object, id, deleted: true };
 }
 
+interface BulkOutcome {
+  id: string;
+  success: boolean;
+  error?: string;
+}
+
+// The bulk executors loop over the single-record REST calls (one HTTP
+// request per Id) and isolate per-record failures. Salesforce's composite
+// "sobjects collections" endpoint could do this in one request; a plain
+// loop is used here to keep salesforceApi.ts untouched and error handling
+// obvious — fine for the record counts this app deals with.
+async function updateRecords(input: ToolInput, sf: SalesforceSession): Promise<ToolResult> {
+  const object = requireObject(input);
+  const ids = requireIdList(input);
+  const fields = requireFieldMap(input);
+
+  const results: BulkOutcome[] = [];
+  for (const id of ids) {
+    try {
+      await sfApiPatch(sf, `/services/data/${SF_API_VERSION}/sobjects/${object}/${id}`, fields);
+      results.push({ id, success: true });
+    } catch (error) {
+      results.push({
+        id,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const succeeded = results.filter((r) => r.success).length;
+  return {
+    object,
+    requested: ids.length,
+    succeeded,
+    failed: ids.length - succeeded,
+    fields: Object.keys(fields),
+    results,
+  };
+}
+
+async function deleteRecords(input: ToolInput, sf: SalesforceSession): Promise<ToolResult> {
+  const object = requireObject(input);
+  const ids = requireIdList(input);
+
+  const results: BulkOutcome[] = [];
+  for (const id of ids) {
+    try {
+      await sfApiDelete(sf, `/services/data/${SF_API_VERSION}/sobjects/${object}/${id}`);
+      results.push({ id, success: true });
+    } catch (error) {
+      results.push({
+        id,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const succeeded = results.filter((r) => r.success).length;
+  return {
+    object,
+    requested: ids.length,
+    succeeded,
+    failed: ids.length - succeeded,
+    results,
+  };
+}
+
 type Executor = (input: ToolInput, sf: SalesforceSession) => Promise<ToolResult>;
 
 const EXECUTORS: Record<string, Executor> = {
@@ -219,6 +310,8 @@ const EXECUTORS: Record<string, Executor> = {
   create_record: createRecord,
   update_record: updateRecord,
   delete_record: deleteRecord,
+  update_records: updateRecords,
+  delete_records: deleteRecords,
 };
 
 export async function executeTool(
