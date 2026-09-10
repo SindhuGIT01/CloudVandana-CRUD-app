@@ -45,7 +45,13 @@ Other guidelines:
 - If a request is ambiguous (which object? which record? what new value? what does "close" mean for this object?), ask the user a short clarifying question instead of guessing.
 - The app pauses and asks the user to confirm before any update or delete actually runs, so you don't need to ask for confirmation yourself - just call the tool. Before calling a destructive tool, write a short line naming the records you're about to change.
 - When a tool returns an { error }, read it, and either fix the arguments and retry or explain the problem to the user.
-- Keep your final answer short and readable: say what you found or did in plain sentences, not raw JSON. Include record counts and the names/numbers of affected records, and call out any that failed.`;
+
+Format your final answer for a chat window, not a terminal:
+- Open with a one-line summary of the outcome, e.g. "Found 12 opportunities matching your filter." or "Closed all 12."
+- If you're reporting more than about three records, list them as a short Markdown bullet list ("- Acme renewal — $40k — Stage: Negotiation"), not a table and not raw JSON.
+- Never paste raw JSON, SOQL, or Salesforce Ids as the main content. Mention an Id only if the user asked for it.
+- Always state counts ("3 of 5 updated") and call out anything that failed and why.
+- Keep it brief — a sentence or two plus the list. Use **bold** only for the headline numbers.`;
 
 export interface AgentReply {
   reply: string;
@@ -109,15 +115,15 @@ function describePendingActions(blocks: Anthropic.ToolUseBlock[]): string {
     const object = String(input.object ?? "record");
     switch (block.name) {
       case "delete_record":
-        return `• Delete 1 ${object} (${String(input.id)}).`;
+        return `- Delete 1 ${object} (${String(input.id)}).`;
       case "update_record":
-        return `• Update ${object} ${String(input.id)}: set ${renderFieldChanges(input.fields)}.`;
+        return `- Update ${object} ${String(input.id)}: set ${renderFieldChanges(input.fields)}.`;
       case "delete_records":
-        return `• Delete ${Array.isArray(input.ids) ? input.ids.length : "?"} ${object} records: ${summarizeIds(input.ids)}.`;
+        return `- Delete ${Array.isArray(input.ids) ? input.ids.length : "?"} ${object} records: ${summarizeIds(input.ids)}.`;
       case "update_records":
-        return `• Update ${Array.isArray(input.ids) ? input.ids.length : "?"} ${object} records (${summarizeIds(input.ids)}): set ${renderFieldChanges(input.fields)}.`;
+        return `- Update ${Array.isArray(input.ids) ? input.ids.length : "?"} ${object} records (${summarizeIds(input.ids)}): set ${renderFieldChanges(input.fields)}.`;
       default:
-        return `• ${block.name}`;
+        return `- ${block.name}`;
     }
   });
   return `This will change your Salesforce data:\n${lines.join("\n")}`;

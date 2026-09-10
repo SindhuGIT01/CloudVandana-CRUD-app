@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { AgentMarkdown } from "../components/AgentMarkdown";
 import { Header } from "../components/Header";
 import { useAgentChat } from "../hooks/useAgentChat";
 
@@ -56,7 +57,11 @@ export function AgentChat() {
           ) : (
             messages.map((message) => (
               <div key={message.id} className={`agent-bubble agent-bubble-${message.role}`}>
-                {message.text}
+                {message.role === "agent" ? (
+                  <AgentMarkdown text={message.text} />
+                ) : (
+                  message.text
+                )}
               </div>
             ))
           )}

@@ -360,6 +360,38 @@
   font-style: italic;
 }
 
+/* Markdown-lite content inside agent bubbles */
+.agent-bubble p {
+  margin: 0 0 8px;
+}
+
+.agent-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.agent-bubble ul,
+.agent-bubble ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.agent-bubble ul:last-child,
+.agent-bubble ol:last-child {
+  margin-bottom: 0;
+}
+
+.agent-bubble li {
+  margin: 2px 0;
+}
+
+.agent-bubble code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 12px;
+}
+
 .agent-chat-confirm {
   display: flex;
   flex-wrap: wrap;
