@@ -3,7 +3,13 @@ node_modules
 
 # personal study/interview notes — never commit these
 ASSIGNMENT_NOTES.md
+ASSIGNMENT_NOTES.pdf
 INTERVIEW_PREP.md
+INTERVIEW_PREP.pdf
+CODE_WALKTHROUGH.md
+CODE_WALKTHROUGH.pdf
+MOCK_INTERVIEW_QA.md
+MOCK_INTERVIEW_QA.pdf
 
 # build output
 dist
