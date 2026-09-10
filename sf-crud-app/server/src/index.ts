@@ -7,6 +7,7 @@ import session from "express-session";
 import "./auth/session.js";
 import { env } from "./config/env.js";
 import { requireAuth } from "./middleware/requireAuth.js";
+import { agentRouter } from "./routes/agent.js";
 import { authRouter } from "./routes/auth.js";
 import { objectsRouter } from "./routes/objects.js";
 import { recordsRouter } from "./routes/records.js";
@@ -61,6 +62,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
 app.use("/api", requireAuth);
 app.use("/api/objects", objectsRouter);
 app.use("/api/records", recordsRouter);
+app.use("/api/agent", agentRouter);
 
 // In production this one server also serves the built client (see README's
 // Deployment section) — no separate static host needed. In dev, Vite's own

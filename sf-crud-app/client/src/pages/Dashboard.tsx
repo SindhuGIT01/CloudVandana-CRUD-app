@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { FieldPicker } from "../components/FieldPicker";
 import { Header } from "../components/Header";
@@ -32,6 +33,10 @@ export function Dashboard() {
   return (
     <main className="dashboard">
       <Header title="Dashboard" showLogout />
+
+      <p>
+        <Link to="/agent">Try the Salesforce Ops Agent (beta) →</Link>
+      </p>
 
       <ObjectSelector value={selectedObject} onChange={handleObjectChange} />
 
